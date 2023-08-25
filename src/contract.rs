@@ -12,7 +12,9 @@ use osmosis_std::types::osmosis::poolmanager::v1beta1::PoolmanagerQuerier;
 
 use crate::error::ContractError;
 use crate::helpers::{convert_redemption_rate_to_scaling_factors, validate_pool_configuration};
-use crate::msg::{ExecuteMsg, InstantiateMsg, OracleQueryMsg, Pools, PriceResponse, QueryMsg};
+use crate::msg::{
+    ExecuteMsg, InstantiateMsg, OracleQueryMsg, Pools, QueryMsg, RedemptionRateResponse,
+};
 use crate::state::{AssetOrdering, Config, Pool, CONFIG, POOLS};
 
 const CONTRACT_NAME: &str = "crates.io:stride-st-scaling-factor";
@@ -189,25 +191,25 @@ pub fn execute_update_scaling_factor(
     let oracle_contract_address = &CONFIG.load(deps.storage)?.oracle_contract_address;
 
     // Build a query to the ICA Oracle contract for the stToken redemption rate
-    let price_query_msg = QueryRequest::Wasm(WasmQuery::Smart {
+    let redemption_rate_query_msg = QueryRequest::Wasm(WasmQuery::Smart {
         contract_addr: oracle_contract_address.to_string(),
-        msg: to_binary(&OracleQueryMsg::Price {
+        msg: to_binary(&OracleQueryMsg::RedemptionRate {
             denom: pool.sttoken_denom.clone(),
             params: None,
         })?,
     });
 
     // Query the oracle to obtain the stToken redemption rate
-    let price_response: PriceResponse =
-        deps.querier
-            .query(&price_query_msg)
-            .map_err(|err| ContractError::UnableToQueryPrice {
-                token: pool.sttoken_denom.clone(),
-                error: err.to_string(),
-            })?;
+    let redemption_rate_response: RedemptionRateResponse = deps
+        .querier
+        .query(&redemption_rate_query_msg)
+        .map_err(|err| ContractError::UnableToQueryRedemptionRate {
+            token: pool.sttoken_denom.clone(),
+            error: err.to_string(),
+        })?;
 
     // Build the scaling factors array from the redemption rate
-    let redemption_rate = price_response.exchange_rate;
+    let redemption_rate = redemption_rate_response.redemption_rate;
     let scaling_factors =
         convert_redemption_rate_to_scaling_factors(redemption_rate, pool.asset_ordering.clone());
 
@@ -308,7 +310,9 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use crate::contract::{execute, instantiate, query};
-    use crate::msg::{ExecuteMsg, InstantiateMsg, OracleQueryMsg, Pools, PriceResponse, QueryMsg};
+    use crate::msg::{
+        ExecuteMsg, InstantiateMsg, OracleQueryMsg, Pools, QueryMsg, RedemptionRateResponse,
+    };
     use crate::state::{AssetOrdering, Config, Pool};
     use crate::ContractError;
 
@@ -317,13 +321,14 @@ mod tests {
 
     const OSMOSIS_POOL_QUERY_TYPE: &str = "/osmosis.poolmanager.v1beta1.Query/Pool";
 
-    // Custom querier used to mock out responses from the price oracle
+    // Custom querier used to mock out responses different contracts
     // The base_querier supports generic bank/wasm/ibc queries
-    // The oracle price responses are hard coded into a hashmap that maps
+    // The redemption rates are hard coded into a hashmap that maps
     // the sttoken denom -> query response
+    // The pools are hard coded into a hashmap that maps pool ID to pool
     pub struct WasmMockQuerier {
         base_querier: MockQuerier<Empty>,
-        oracle_prices: HashMap<String, PriceResponse>,
+        oracle_redemption_rates: HashMap<String, RedemptionRateResponse>,
         pools: HashMap<u64, PoolQueryResponse>,
     }
 
@@ -353,20 +358,20 @@ mod tests {
         pub fn new() -> Self {
             WasmMockQuerier {
                 base_querier: MockQuerier::new(&[]),
-                oracle_prices: HashMap::new(),
+                oracle_redemption_rates: HashMap::new(),
                 pools: HashMap::new(),
             }
         }
 
-        // The only supported queries are oracle price queries (to the oracle contract address) or
-        // generic base queries
+        // The only supported queries are oracle redemption rate queries (to the oracle contract address)
+        // stargate pool queries, or generic base queries
         pub fn handle_query(&self, request: &QueryRequest<Empty>) -> QuerierResult {
             match &request {
                 QueryRequest::Wasm(WasmQuery::Smart { contract_addr, msg }) => {
                     if contract_addr == ORACLE_ADDRESS {
                         match from_binary(msg).unwrap() {
-                            OracleQueryMsg::Price { denom, .. } => {
-                                match self.oracle_prices.get(&denom) {
+                            OracleQueryMsg::RedemptionRate { denom, .. } => {
+                                match self.oracle_redemption_rates.get(&denom) {
                                     Some(resp) => SystemResult::Ok(to_binary(&resp).into()),
                                     None => SystemResult::Err(SystemError::Unknown {}),
                                 }
@@ -393,11 +398,11 @@ mod tests {
 
         // Adds a mocked entry to the querier such that queries with the specified denom
         // return a query response with the given redemption rate
-        pub fn mock_oracle_price_query(&mut self, denom: String, redemption_rate: Decimal) {
-            self.oracle_prices.insert(
+        pub fn mock_oracle_redemption_rate(&mut self, denom: String, redemption_rate: Decimal) {
+            self.oracle_redemption_rates.insert(
                 denom,
-                PriceResponse {
-                    exchange_rate: redemption_rate,
+                RedemptionRateResponse {
+                    redemption_rate,
                     update_time: 1,
                 },
             );
@@ -774,7 +779,7 @@ mod tests {
         let (mut deps, mut env, info) = default_instantiate();
         env.block.time = Timestamp::from_seconds(block_time);
         deps.querier
-            .mock_oracle_price_query(sttoken_denom.to_string(), redemption_rate);
+            .mock_oracle_redemption_rate(sttoken_denom.to_string(), redemption_rate);
 
         // Mock out the stableswap pool on Osmosis
         deps.querier.mock_stableswap_pool(pool_id, &pool);

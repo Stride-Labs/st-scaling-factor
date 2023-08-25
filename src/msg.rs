@@ -72,20 +72,20 @@ pub struct Pools {
     pub pools: Vec<Pool>,
 }
 
-/// Price query as defined in the ICA Oracle contract
+/// RedemptionRate query as defined in the ICA Oracle contract
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum OracleQueryMsg {
-    #[returns(PriceResponse)]
-    Price {
+    #[returns(RedemptionRateResponse)]
+    RedemptionRate {
         denom: String,
         params: Option<Binary>,
     },
 }
 
-/// Response from ICA Oracle price query
+/// Response from ICA Oracle redemption rate query
 #[cw_serde]
-pub struct PriceResponse {
-    pub exchange_rate: Decimal,
+pub struct RedemptionRateResponse {
+    pub redemption_rate: Decimal,
     pub update_time: u64,
 }

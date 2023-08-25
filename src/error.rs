@@ -9,8 +9,8 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
-    #[error("Unable to query price of {token} from oracle, {error}")]
-    UnableToQueryPrice { token: String, error: String },
+    #[error("Unable to query redemption rate of {token} from oracle, {error}")]
+    UnableToQueryRedemptionRate { token: String, error: String },
 
     #[error("Pool {pool_id} is not configured in the contract")]
     PoolNotFound { pool_id: u64 },
