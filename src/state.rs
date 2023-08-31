@@ -16,6 +16,8 @@ pub struct Config {
 /// Pool represents a stableswap pool that should have it's scaling factors adjusted
 #[cw_serde]
 pub struct Pool {
+    /// Pool ID of the Osmosis pool (e.g. 833)
+    pub pool_id: u64,
     /// The denom of the stToken as it lives on Osmosis (e.g. ibc/{hash(transfer/channel-0/stuosmo)})
     /// This is the same denom that's in the oracle contract, and will line up with the denom in the
     /// Osmosis pool

@@ -137,6 +137,7 @@ pub fn execute_add_pool(
     )?;
 
     let pool = Pool {
+        pool_id,
         sttoken_denom: sttoken_denom.clone(),
         asset_ordering: asset_ordering.clone(),
         last_updated: 0,
@@ -485,8 +486,9 @@ mod tests {
     }
 
     // Helper function to create a test Pool object
-    fn get_test_pool(sttoken_denom: &str, asset_ordering: AssetOrdering) -> Pool {
+    fn get_test_pool(pool_id: u64, sttoken_denom: &str, asset_ordering: AssetOrdering) -> Pool {
         return Pool {
+            pool_id,
             sttoken_denom: sttoken_denom.to_string(),
             asset_ordering,
             last_updated: 0,
@@ -496,7 +498,7 @@ mod tests {
     // Helper function to get an add-pool message from a pool object
     fn get_add_pool_msg(pool_id: u64, pool: Pool) -> crate::msg::ExecuteMsg {
         return ExecuteMsg::AddPool {
-            pool_id: pool_id,
+            pool_id,
             sttoken_denom: pool.sttoken_denom,
             asset_ordering: pool.asset_ordering,
         };
@@ -559,9 +561,9 @@ mod tests {
         let (mut deps, env, info) = default_instantiate();
 
         // Create 3 dummy pools
-        let pool1 = get_test_pool("stA", AssetOrdering::StTokenFirst);
-        let pool2 = get_test_pool("stB", AssetOrdering::NativeTokenFirst);
-        let pool3 = get_test_pool("stC", AssetOrdering::StTokenFirst);
+        let pool1 = get_test_pool(1, "stA", AssetOrdering::StTokenFirst);
+        let pool2 = get_test_pool(2, "stB", AssetOrdering::NativeTokenFirst);
+        let pool3 = get_test_pool(3, "stC", AssetOrdering::StTokenFirst);
 
         // Mock each pool in the querier
         deps.querier.mock_stableswap_pool(1, &pool1);
@@ -569,23 +571,23 @@ mod tests {
         deps.querier.mock_stableswap_pool(3, &pool3);
 
         // Add each pool, and confirm the attributes and pool-query for each
-        let pools = vec![pool1.clone(), pool2.clone(), pool3.clone()];
-        for (i, pool) in pools.into_iter().enumerate() {
-            let pool_id = (i + 1) as u64;
-            let add_msg = get_add_pool_msg(pool_id, pool.clone());
+        for pool in vec![pool1.clone(), pool2.clone(), pool3.clone()] {
+            let add_msg = get_add_pool_msg(pool.pool_id, pool.clone());
             let add_msg_resp = execute(deps.as_mut(), env.clone(), info.clone(), add_msg).unwrap();
 
             assert_eq!(
                 add_msg_resp.attributes,
                 vec![
                     attr("action", "add_pool"),
-                    attr("pool_id", pool_id.to_string()),
+                    attr("pool_id", pool.pool_id.to_string()),
                     attr("pool_sttoken_denom", pool.sttoken_denom.clone()),
                     attr("pool_asset_ordering", pool.asset_ordering.to_string()),
                 ]
             );
 
-            let query_pool_msg = QueryMsg::Pool { pool_id };
+            let query_pool_msg = QueryMsg::Pool {
+                pool_id: pool.pool_id,
+            };
             let query_resp = query(deps.as_ref(), env.clone(), query_pool_msg).unwrap();
             let pool_resp: Pool = from_binary(&query_resp).unwrap();
 
@@ -647,7 +649,7 @@ mod tests {
         let misconfigured_pool_id = 999;
 
         // Create a pool configuration and message
-        let pool = get_test_pool("sttoken", AssetOrdering::StTokenFirst);
+        let pool = get_test_pool(queried_id, "sttoken", AssetOrdering::StTokenFirst);
         let add_msg = get_add_pool_msg(queried_id, pool.clone());
 
         // Mock out the query response so that the returned pool has a different pool ID
@@ -675,7 +677,7 @@ mod tests {
 
         // Create a pool configuration and message
         let pool_id = 1;
-        let pool = get_test_pool("sttoken", AssetOrdering::StTokenFirst);
+        let pool = get_test_pool(pool_id, "sttoken", AssetOrdering::StTokenFirst);
         let add_msg = get_add_pool_msg(pool_id, pool.clone());
 
         // Mock out the query response so that the returned pool has a more than 2 assets
@@ -714,8 +716,8 @@ mod tests {
         let (mut deps, env, info) = default_instantiate();
 
         // Create two pools, one with stToken first, and the other with the stToken second
-        let pool1 = get_test_pool("sttoken", AssetOrdering::StTokenFirst);
-        let pool2 = get_test_pool("sttoken", AssetOrdering::NativeTokenFirst);
+        let pool1 = get_test_pool(1, "sttoken", AssetOrdering::StTokenFirst);
+        let pool2 = get_test_pool(2, "sttoken", AssetOrdering::NativeTokenFirst);
 
         // Mock those two pools out in the query response
         deps.querier.mock_stableswap_pool(1, &pool1);
@@ -742,7 +744,7 @@ mod tests {
 
         // Attempt to add the pool with a non-admin address
         let pool_id = 1;
-        let pool = get_test_pool("stA", AssetOrdering::StTokenFirst);
+        let pool = get_test_pool(pool_id, "stA", AssetOrdering::StTokenFirst);
         let add_msg = get_add_pool_msg(pool_id, pool);
         let add_resp = execute(deps.as_mut(), env.clone(), invalid_info.clone(), add_msg);
 
@@ -769,7 +771,7 @@ mod tests {
         let pool_id = 2;
         let sttoken_denom = "stuosmo";
         let asset_ordering = AssetOrdering::StTokenFirst;
-        let pool = get_test_pool(sttoken_denom, asset_ordering);
+        let pool = get_test_pool(pool_id, sttoken_denom, asset_ordering);
 
         let block_time = 1_000_000;
         let redemption_rate = Decimal::from_str("1.2").unwrap();
