@@ -4,6 +4,11 @@ Osmosis stableswap pools have a "scaling factor" which indicates the expected ra
 
 With the new `icaoracle` module on Stride, each time the redemption rate updates, the new value is submitted to an oracle contract on Osmosis via an ICA. The contract in the repo represents the last piece of the puzzle to help fully automate the scaling factor changes, by querying the redemption rate value from the oracle contract and submitting the corresponding Osmosis transaction to update the scaling factor.
 
+## Mainnet Deployments
+| Chain     | Code ID | Contract Address                                                   |
+|-----------|---------|--------------------------------------------------------------------|
+| Osmosis   | 152     | osmo12yvjuy69ynnts95ensss4q6480wkvkpnq2z2ntxmfa2qp860xsmq9mzlpn    |
+
 ## Overview
 The contract consists of admin-gated transactions to register a pool and provide the relevant configuration, as well as a permissionless transaction to refresh the scaling factor of a configured pool based on the redemption rate value in the oracle. 
 
